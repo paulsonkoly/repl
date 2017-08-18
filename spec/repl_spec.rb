@@ -31,8 +31,8 @@ RSpec::describe REPL do
   end
 
   context 'when evaluating unbalanced parenthesis' do
-    it 'raises UnbalancedParens error' do
-      expect { @repl.run(')') }.to raise_error REPL::UnbalancedParens
+    it 'raises error' do
+      expect { @repl.run(')') }.to raise_error Parslet::ParseFailed
     end
   end
 

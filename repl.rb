@@ -1,5 +1,12 @@
 require 'parslet'
 
+class Parslet::Atoms::Base
+  def surrounded_by(other, other2 = nil)
+    other2 ||= other
+    other >> self >> other2
+  end
+end
+
 ######################################################################
 class REPLParser < Parslet::Parser
   root :instruction
@@ -9,29 +16,27 @@ class REPLParser < Parslet::Parser
   end
 
   rule :assignment do
-    variable >> wp? >> str('=') >> wp? >> low_precedence.as(:expression)
+    variable >> str('=').surrounded_by(wp?) >> low_precedence.as(:expression)
   end
 
   rule :wp? { match('[ \t]').maybe }
 
-  rule :low_precedence do
-    (high_precedence.as(:left) >>
-     wp? >> match('[+-]').as(:operator) >> wp? >>
-     low_precedence.as(:right)) |
-    high_precedence
+  def self.operator(name, list, sub_rule)
+    rule name do
+      (send(sub_rule).as(:left) >>
+       match(list).as(:operator).surrounded_by(wp?) >>
+       send(name).as(:right)) |
+      send(sub_rule)
+    end
   end
 
-  rule :high_precedence do
-    (atom.as(:left) >>
-      wp? >> match('[*/%]').as(:operator) >> wp? >>
-      high_precedence.as(:right)) |
-      atom
-  end
+  operator :low_precedence, '[+-]', :high_precedence
+  operator :high_precedence, '[*/%]', :atom
 
   rule :atom { parenthesis | variable | value }
 
   rule :parenthesis do
-    str('(') >> wp? >> low_precedence >> wp? >> str(')')
+    low_precedence.surrounded_by(str('(') >> wp?, wp? >> str(')'))
   end
 
   rule :variable do
@@ -44,45 +49,38 @@ class REPLParser < Parslet::Parser
   end
 end
 
-######################################################################
+class REPLTransform < Parslet::Transform
+  rule(value: simple(:value)) { value.to_f }
+
+  rule(left: simple(:left),
+       operator: simple(:operator),
+       right: simple(:right)) do
+    left.send(operator, right)
+  end
+
+  rule(assignment: { variable: simple(:assignee),
+                     expression: simple(:value)}) do |dictionary|
+    @@variables ||= {}
+    @@variables[dictionary[:assignee].str] = dictionary[:value]
+  end
+
+  rule(variable: simple(:variable)) { @@variables&.fetch(variable.str) }
+end
+
 class REPL
-  class UnbalancedParens < RuntimeError; end
-
   def initialize
-    @variables = {}
+    @parser = REPLParser.new
+    @evaluator = REPLTransform.new
   end
 
-  def run(str)
-    parser = REPLParser.new
-    begin
-      tree = parser.parse(str)
-    rescue
-      raise UnbalancedParens
-    end
-
-    assignment = tree[:assignment]
-    if assignment
-      @variables[assignment[:variable].str] = evaluate(assignment[:expression])
-    else
-      evaluate(tree)
-    end
-  end
-
-  private
-
-  def evaluate(tree)
-    case
-    when tree[:operator] then evaluate(tree[:left]).send(tree[:operator], evaluate(tree[:right]))
-    when tree[:variable] then @variables[tree[:variable].str]
-    when tree[:value] then tree[:value].to_f
-    else raise tree.inspect
-    end
+  def run(line)
+    @evaluator.apply(@parser.parse(line))
   end
 end
 
 if __FILE__ == $0
-  r = REPL.new
+  repl = REPL.new
   loop do
-    puts r.run(STDIN.readline)
+    p REPL.run(STDIN.readline)
   end
 end
