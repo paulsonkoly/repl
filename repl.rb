@@ -1,81 +1,48 @@
-require 'strscan'
-require 'forwardable'
+require 'parslet'
 
 ######################################################################
-# Tokens
-class Equal; end
-class LeftParen; end
-class RightParen; end
+class REPLParser < Parslet::Parser
+  root :instruction
 
-class Operator
-  def initialize(sym)
-    @sym = sym.to_sym
+  rule :instruction do
+    assignment.as(:assignment) | low_precedence
   end
 
-  def precedence
-    case @sym
-    when :* , :/ , :% then 1
-    when :+ , :-      then 0
-    end
+  rule :assignment do
+    variable >> wp? >> str('=') >> wp? >> low_precedence.as(:expression)
   end
 
-  include Comparable
+  rule :wp? { match('[ \t]').maybe }
 
-  def <=>(other)
-      precedence <=> other.precedence
+  rule :low_precedence do
+    (high_precedence.as(:left) >>
+     wp? >> match('[+-]').as(:operator) >> wp? >>
+     low_precedence.as(:right)) |
+    high_precedence
   end
 
-  def eval(*operands)
-    operands[0].send(@sym, *operands[1..-1])
-  end
-end
-
-class Operand; end
-
-class Number < Operand
-  attr_accessor :value
-  def initialize(value)
-    @value = value.to_f
-  end
-end
-
-class Identifier < Operand
-  attr_accessor :name
-  def initialize(name)
-    @name = name.to_sym
-  end
-end
-
-######################################################################
-class Lexer
-  class LexerError < RuntimeError; end
-
-  def initialize(str)
-    @scanner = StringScanner.new(str)
+  rule :high_precedence do
+    (atom.as(:left) >>
+      wp? >> match('[*/%]').as(:operator) >> wp? >>
+      high_precedence.as(:right)) |
+      atom
   end
 
-  extend Forwardable
-  def_delegator :@scanner, :reset, :reset
-  def_delegator :@scanner, :eos?, :eos?
+  rule :atom { parenthesis | variable | value }
 
-  def next
-    until eos?
-      if @scanner.scan(/=/) then return(Equal.new)
-      elsif @scanner.scan(/\(/) then return(LeftParen.new)
-      elsif @scanner.scan(/\)/) then return(RightParen.new)
-      elsif @scanner.scan(/[+\-*\/%]/)
-        return(Operator.new(@scanner.matched))
-      elsif @scanner.scan(/\d+(\.\d+)?/)
-        return(Number.new(@scanner.matched))
-      elsif @scanner.scan(/\w+/)
-        return(Identifier.new(@scanner.matched))
-      elsif @scanner.scan(/\s+/)
-      else raise LexerError
-      end
-    end
+  rule :parenthesis do
+    str('(') >> wp? >> low_precedence >> wp? >> str(')')
+  end
+
+  rule :variable do
+    (match('[a-zA-Z]') >> match('[a-zA-Z0-9]').repeat(0)).as(:variable)
+  end
+
+  rule :value do
+    (match('[0-9]').repeat(1) >>
+     (str('.') >> match('[0-9]').repeat(1)).maybe).as(:value)
   end
 end
-
 
 ######################################################################
 class REPL
@@ -86,68 +53,30 @@ class REPL
   end
 
   def run(str)
-    lexer = Lexer.new(str)
+    parser = REPLParser.new
+    begin
+      tree = parser.parse(str)
+    rescue
+      raise UnbalancedParens
+    end
 
-    id = lexer.next
-    eq = lexer.next
-    if id.class == Identifier && eq.class == Equal
-      @variables[id.name] = evaluate(lexer)
+    assignment = tree[:assignment]
+    if assignment
+      @variables[assignment[:variable].str] = evaluate(assignment[:expression])
     else
-      lexer.reset
-      evaluate(lexer)
+      evaluate(tree)
     end
   end
 
   private
 
-  def evaluate(lexer)
-    tokens = shunting_yard(lexer)
-    reverse_polish(tokens)
-  end
-
-  def shunting_yard(lexer)
-    result, stack = [], []
-
-    until lexer.eos?
-      token = lexer.next
-      case token
-
-      when Operand then result << token
-
-      when Operator
-        while Operator === stack.last && stack.last >= token
-          result << stack.pop
-        end
-        stack << token
-
-      when LeftParen then stack << token
-      when RightParen
-        result << stack.pop until LeftParen === stack.last || stack.empty?
-        raise UnbalancedParens if stack.empty?
-        stack.pop
-      end
+  def evaluate(tree)
+    case
+    when tree[:operator] then evaluate(tree[:left]).send(tree[:operator], evaluate(tree[:right]))
+    when tree[:variable] then @variables[tree[:variable].str]
+    when tree[:value] then tree[:value].to_f
+    else raise tree.inspect
     end
-
-    until stack.empty?
-      raise UnbalancedParens if LeftParen === stack.last
-      result << stack.pop
-    end
-    result
-  end
-
-  def reverse_polish(tokens)
-    stack = []
-    until tokens.empty?
-      token = tokens.shift
-      case token
-      when Number then stack << token.value
-      when Identifier then stack << @variables[token.name]
-      when Operator
-        b, a = stack.pop, stack.pop
-        stack << token.eval(a, b)
-      end
-    end
-    stack.pop
   end
 end
 
