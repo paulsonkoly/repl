@@ -81,6 +81,6 @@ end
 if __FILE__ == $0
   repl = REPL.new
   loop do
-    p REPL.run(STDIN.readline)
+    p repl.run(STDIN.readline.chomp)
   end
 end
