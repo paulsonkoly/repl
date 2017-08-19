@@ -8,24 +8,28 @@ class Parslet::Atoms::Base
 end
 
 ######################################################################
+# Grammar :
+#
+# INSTRUCTION     -> ASSIGNMENT | LOW_PRECEDENCE
+# ASSIGNMENT      -> variable '=' LOW_PRECEDENCE
+# LOW_PRECEDENCE  -> HIGH_PRECEDENCE [+-] LOW_PRECEDENCE | HIGH_PRECEDENCE
+# HIGH_PRECEDENCE -> ATOM [*/%] HIGH_PRECEDENCE | ATOM
+# ATOM            -> PARENTHESIS | variable | value
+# PARENTHESIS     -> '(' LOW_PRECEDENCE ')'
+#
+# The parser also eats the optional white spaces around tokens.
 class REPLParser < Parslet::Parser
   root :instruction
 
-  rule :instruction do
-    assignment.as(:assignment) | low_precedence
-  end
+  rule :instruction { assignment.as(:assignment) | low_precedence }
 
-  rule :assignment do
-    variable >> str('=').surrounded_by(wp?) >> low_precedence.as(:expression)
-  end
-
-  rule :wp? { match('[ \t]').maybe }
+  rule :assignment { variable >> equal >> low_precedence.as(:expression) }
 
   def self.operator(name, list, sub_rule)
     rule name do
-      (send(sub_rule).as(:left) >>
-       match(list).as(:operator).surrounded_by(wp?) >>
-       send(name).as(:right)) |
+      send(sub_rule).as(:left) >>
+      match(list).as(:operator).surrounded_by(wp?) >>
+      send(name).as(:right) |
       send(sub_rule)
     end
   end
@@ -47,6 +51,9 @@ class REPLParser < Parslet::Parser
     (match('[0-9]').repeat(1) >>
      (str('.') >> match('[0-9]').repeat(1)).maybe).as(:value)
   end
+
+  rule :equal { str('=').surrounded_by(wp?) }
+  rule :wp? { match('[ \t]').maybe }
 end
 
 class REPLTransform < Parslet::Transform
@@ -54,9 +61,7 @@ class REPLTransform < Parslet::Transform
 
   rule(left: simple(:left),
        operator: simple(:operator),
-       right: simple(:right)) do
-    left.send(operator, right)
-  end
+       right: simple(:right)) { left.send(operator, right) }
 
   rule(assignment: { variable: simple(:assignee),
                      expression: simple(:value)}) do |dictionary|
