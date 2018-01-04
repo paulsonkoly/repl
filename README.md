@@ -1,0 +1,1 @@
+This is a programming exercise, implemented two different ways. One approach is the traditional algorithmic reverse polish notation/shunting yard algorithm, the other is the declarative / functional approach with DSLs. All In Ruby. You make your pick, I'm no judge. Whatever.
