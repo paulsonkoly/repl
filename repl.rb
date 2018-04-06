@@ -1,8 +1,7 @@
 require 'parslet'
 
 class Parslet::Atoms::Base
-  def surrounded_by(other, other2 = nil)
-    other2 ||= other
+  def surrounded_by(other, other2 = other)
     other >> self >> other2
   end
 end
@@ -21,9 +20,9 @@ end
 class REPLParser < Parslet::Parser
   root :instruction
 
-  rule :instruction { assignment.as(:assignment) | low_precedence }
+  rule(:instruction) { assignment.as(:assignment) | low_precedence }
 
-  rule :assignment { variable >> equal >> low_precedence.as(:expression) }
+  rule(:assignment) { variable >> equal >> low_precedence.as(:expression) }
 
   def self.operator(name, list, sub_rule)
     rule name do
@@ -37,7 +36,7 @@ class REPLParser < Parslet::Parser
   operator :low_precedence, '[+-]', :high_precedence
   operator :high_precedence, '[*/%]', :atom
 
-  rule :atom { parenthesis | variable | value }
+  rule(:atom) { parenthesis | variable | value }
 
   rule :parenthesis do
     low_precedence.surrounded_by(str('(') >> wp?, wp? >> str(')'))
@@ -52,8 +51,8 @@ class REPLParser < Parslet::Parser
      (str('.') >> match('[0-9]').repeat(1)).maybe).as(:value)
   end
 
-  rule :equal { str('=').surrounded_by(wp?) }
-  rule :wp? { match('[ \t]').maybe }
+  rule(:equal) { str('=').surrounded_by(wp?) }
+  rule(:wp?) { match('[ \t]').maybe }
 end
 
 class REPLTransform < Parslet::Transform
