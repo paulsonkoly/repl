@@ -7,6 +7,7 @@ The program supports of parsing and evaluating simple arithmetics, and variables
 ```
 $ repl.rb
 2.0
+2.0
 a
 nil
 a = 3 + 4
