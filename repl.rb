@@ -64,11 +64,13 @@ class REPLTransform < Parslet::Transform
 
   rule(assignment: { variable: simple(:assignee),
                      expression: simple(:value)}) do |dictionary|
-    @@variables ||= {}
-    @@variables[dictionary[:assignee].str] = dictionary[:value]
+    @variables ||= {}
+    @variables[dictionary[:assignee].str] = dictionary[:value]
   end
 
-  rule(variable: simple(:variable)) { @@variables&.fetch(variable.str) }
+  rule(variable: simple(:variable)) do |dictionary|
+    @variables&.fetch(dictionary[:variable].str)
+  end
 end
 
 class REPL
