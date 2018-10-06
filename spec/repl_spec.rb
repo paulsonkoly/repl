@@ -59,7 +59,7 @@ RSpec::describe Operator do
 end
 
 RSpec::describe REPL do
-  before :each { @repl = REPL.new }
+  before { @repl = REPL.new }
 
   context 'when evaluating a single token expression' do
     it 'returns the single token' do
@@ -74,7 +74,7 @@ RSpec::describe REPL do
   end
 
   context 'after assignign a variable' do
-    before :each { @repl.run('a=1') }
+    before { @repl.run('a=1') }
 
     it 'can retrieve the variable' do
       expect(@repl.run('a')).to eq(1.0)
