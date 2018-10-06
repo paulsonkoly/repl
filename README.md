@@ -1,4 +1,4 @@
-This is a programming exercise, implemented two different ways. One approach is the traditional algorithmic reverse polish notation/shunting yard algorithm, the other is the declarative / functional approach with DSLs. The two implementations are pointed by the two branches: [parslet](/phaul/repl/parslet), [reverse polish](/phaul/repl/reverse_polish).
+This is a programming exercise, implemented two different ways. One approach is the traditional algorithmic reverse polish notation/shunting yard algorithm, the other is the declarative / functional approach with DSLs. The two implementations are pointed by the two branches: [parslet](/phaul/repl/tree/parslet), [reverse polish](/phaul/repl/tree/reverse_polish).
 
 ## Example
 
